@@ -6,6 +6,7 @@ import pickle
 import matplotlib.pyplot as plt
 import numpy as np
 sys.path.append("../tools/")
+import pandas as pd
 from feature_format import featureFormat, targetFeatureSplit
 from tester import dump_classifier_and_data, test_classifier
 from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedShuffleSplit
@@ -13,11 +14,12 @@ from sklearn import svm, datasets, preprocessing, metrics
 from sklearn.feature_selection import SelectKBest, f_regression
 from sklearn.decomposition import PCA
 from sklearn.pipeline import make_pipeline, Pipeline
-from sklearn.metrics import f1_score, make_scorer,classification_report
+from sklearn.metrics import f1_score, make_scorer,classification_report, accuracy_score
 from sklearn import tree
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
+from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier,GradientBoostingClassifier
+from sklearn.svm import SVC
 
 import pprint
 import datetime
@@ -29,7 +31,7 @@ print "\nPROJECT REPORT - MODULE 5 MACHINE LEARNING"
 print "\t by Jonas Dinesen, January 2017"
 
 #########################################################################
-### General 
+### 0. General Functions
 #########################################################################
 print "\nA.INITIALIZATION"
 print "\tExplore, Select features and remove outliers"
@@ -81,8 +83,10 @@ def simplePlot(f1_name,f1_index,f2_name,f2_index,log=False):
 		plotOutliers.append([point[0],f1_value,f2_value,"b"])
 	drawPlot(plotOutliers,True,f1_name,f2_name,title="QuickPlot",log=log)
 
+
 #########################################################################
 ### Task 1: Select features 
+#########################################################################
 
 ## Combine all features in one list
 poi = ['poi']
@@ -113,9 +117,9 @@ print "\tNumber of People in dataset:",len(data_dict)
 print "\tNumber of POIs in dataset:", pois
 print "\tNumber of features to begin with:",len(features_list)
 
-### Below checking for features with many missing/zero values 
+### Below checking for features with many missing/zero values
 ## the concern is that features with too many NaN/zero values will skew the data
-## The rate is displayed in percentage 
+## The rate is displayed in percentage
 def check_nans(data):
 	nan_list = {}
 	for feat in features_list:
@@ -134,9 +138,9 @@ def check_nans(data):
 					nan_list[feat][1] +=1
 				else:
 					nan_list[feat][2] +=1
-		nan_list[feat][0] = round(1- (float(nan_list[feat][0]) / float(counter)),2)
-		nan_list[feat][1] = round(1- (float(nan_list[feat][1]) / float(count_pois)),2)
-		nan_list[feat][2] = round(1- (float(nan_list[feat][2]) / float(counter-count_pois)),2)
+		nan_list[feat][0] = round(1 - (float(nan_list[feat][0]) / float(counter)),2)
+		nan_list[feat][1] = round(1 - (float(nan_list[feat][1]) / float(count_pois)),2)
+		nan_list[feat][2] = round(1 - (float(nan_list[feat][2]) / float(counter-count_pois)),2)
 	print "\nChecking NaNs:"
 	print "\tPOIs:",count_pois, "All:",counter,"Features:",count_feats
 	print "\tFeature non-NaNs: ALL, POIs, Non_POIs"
@@ -184,11 +188,11 @@ def find_outliers(f1_name,f1_index,f2_name,f2_index,f1_thresh,f2_thresh):
 	for entry in data_dict:
 		if data_dict[entry][f1_name] == "NaN" and data_dict[entry][f2_name] == "NaN":
 			outliers.append(["Value NaNs",entry])
-		if (' ' in entry) ==False:
+		if (' ' in entry) == False:
 			outliers.append(["OneWord Na",entry])
 
 	## Plot to see outliers 
-	drawPlot(plotOutliers,True,f1_name,f2_name,title="Spot Outliers")
+	drawPlot(plotOutliers, True, f1_name, f2_name, title="Spot Outliers")
 
 	## Return list of outliers
 	return outliers
@@ -203,10 +207,23 @@ def missing_salary():
 	no_salary_lst = []
 	for entry in data_dict:
 		if data_dict[entry]['salary'] == 'NaN':
-			no_salary_lst.append(entry)
+			no_salary_lst.append([entry,data_dict[entry]])
 	return no_salary_lst
 
-no_salary_lst = missing_salary()
+## Print overview of people missing salary information
+pp.pprint(missing_salary())
+
+## Based on missing salary list, I checked the names in the insider overview PDF supplied with the data set. And based on this
+## I selected the following people for excluding (note: 'HIRKO JOSEPH' is a POI)
+selected_no_salaries = ['CORDES WILLIAM R', 'MEYER ROCKFORD G', 'HORTON STANLEY C', 'GIBBS DANA R', \
+ 'LOWRY CHARLES P', 'WALTERS GARETH W', 'CHAN RONNIE', 'BELFER ROBERT', 'WODRASKA JOHN', 'URQUHART JOHN A', \
+ 'WHALEY DAVID A', 'HAUG DAVID L', 'MENDELSOHN JOHN', 'CLINE KENNETH W', 'LEWIS RICHARD', 'HAYES ROBERT E',\
+ 'MCCARTY DANNY J', 'WAKEHAM JOHN', 'POWERS WILLIAM', 'DUNCAN JOHN H', 'LEMAISTRE CHARLES', 'PIRO JIM', 'WROBEL BRUCE', \
+ 'MEYER JEROME J', 'MCDONALD REBECCA', 'SCRIMSHAW MATTHEW', 'GATHMANN WILLIAM D', 'GILLIS JOHN', 'MORAN MICHAEL P',\
+ 'FOY JOE', 'LOCKHART EUGENE E', 'PEREIRA PAULO V. FERRAZ', 'BLAKE JR. NORMAN P', 'SHERRICK JEFFREY B', 'PRENTICE JAMES',\
+ 'THE TRAVEL AGENCY IN THE PARK', 'NOLES JAMES L', 'FOWLER PEGGY', 'CHRISTODOULOU DIOMEDES', 'JAEDICKE ROBERT', \
+ 'WINOKUR JR. HERBERT S', 'BROWN MICHAEL', 'BADUM JAMES P', 'HUGHES JAMES A', 'BHATNAGAR SANJAY', 'YEAP SOON', \
+ 'HIRKO JOSEPH', 'HAYSLETT RODERICK J', 'FUGH JOHN L', 'SAVAGE FRANK', 'GRAMM WENDY L']
 
 # Function to Remove outliers deemed necessary to remove through above
 def remove_outliers(outliers):
@@ -216,7 +233,7 @@ def remove_outliers(outliers):
 		for point in outliers:
 			try:
 				data_dict.pop( point, 0 )
-				print "\tRemoved:",point 
+				print "\tRemoved:", point 
 			except: 
 				print "\tFailed to remove:", point
 	else: 
@@ -225,7 +242,7 @@ def remove_outliers(outliers):
 
 # Send selected outliers for being removed 
 data_dict = remove_outliers(selected_outliers)
-data_dict = remove_outliers(no_salary_lst)
+data_dict = remove_outliers(selected_no_salaries)
 
 # Recreate features and labels
 data = featureFormat(data_dict, features_list)
@@ -236,7 +253,6 @@ features_train, features_test, labels_train, labels_test = \
 ## Plotting several charts 
 #print "\n",features_list[1], features_list[4]
 simplePlot("salary",1,"bonus",4,True) #FINAL / 8 exercies_stock_options + 9 Other..10=
-#simplePlot("salary",1,"defferal_payments",2)
 #simplePlot("salary",1,"total_stock_value",6)
 #simplePlot("salary",1,"from_this_person_to_poi",15)
 
@@ -248,7 +264,7 @@ simplePlot("salary",1,"bonus",4,True) #FINAL / 8 exercies_stock_options + 9 Othe
 def computeFraction( messages, all_messages ):
 	# Divide nominator with denominator - if nominator is NaN set to zero
 	if messages != "NaN":
-		fraction = float(messages)/float(all_messages)
+		fraction = float(messages) / float(all_messages)
 	else:
 		fraction = 0
 	return fraction
@@ -272,17 +288,17 @@ for name in data_dict:
 	from_this_person_to_poi = data_point["from_this_person_to_poi"]
 	from_messages = data_point["from_messages"]
 	fraction_to_poi = computeFraction( from_this_person_to_poi, from_messages )
-	submit_dict[name]={"from_poi_to_this_person":fraction_from_poi,"from_this_person_to_poi":fraction_to_poi}
+	submit_dict[name] = {"from_poi_to_this_person":fraction_from_poi,"from_this_person_to_poi":fraction_to_poi}
 	data_point["fraction_to_poi"] = fraction_to_poi
 
 def submitDict():
     return submit_dict
 
 ## Create new data list with new features
-new_features = ['fraction_to_poi','fraction_from_poi','fraction_to_vs_from'] 
+new_features = ['fraction_to_poi','fraction_to_vs_from']#,'fraction_from_poi']#,'fraction_to_vs_from'] 
 features_list = features_list + new_features
 
-# Recreate features and labels
+## Recreate features and labels
 labels, features = targetFeatureSplit(data)
 data = featureFormat(data_dict, features_list, sort_keys = True)
 features_train, features_test, labels_train, labels_test = \
@@ -342,62 +358,51 @@ print "\t", features_list
 ### Task 4: Try a varity of classifiers
 #########################################################################
 
-clf = ""
-###### Naive-Bayes / Gaussian #########################
-def nb_clf(features_train, labels_train):
-	from sklearn.naive_bayes import GaussianNB
-	clf = GaussianNB()
-	# Create Naive-Bayes classifier
-	clf = clf.fit(features_train, labels_train) # set features and labels
-	return clf
-
-############## SVM ######################
-def svm_clf(features_train, labels_train):
-	from sklearn.svm import SVC
-	clf = SVC(kernel="rbf")
-	# Create SVM classifier
-	clf = clf.fit(features_train, labels_train) 
-	return clf
-
-############## Decision Tree ######################
-def dt_clf(features_train, labels_train):
-	from sklearn import tree
-	clf = tree.DecisionTreeClassifier(min_samples_split=10,max_depth=4)
-	# Create Decision tree classifier
-	clf = clf.fit(features_train, labels_train)
-	return clf
-
 ############## Default ##################
-### Accuracy Score
-from sklearn.metrics import accuracy_score
+
+### Calculate Accuracy Score
 def accuracy(pred, labels_test):
 	acc = accuracy_score(pred, labels_test)
 	return acc
 
-## RUNtime ###
-def runtime(type):
-	name = None
-	if type == "dt":
-		clf = dt_clf(features_train, labels_train)
-		name = "DecisionTree"
-	if type == "nb": 
-		clf = nb_clf(features_train, labels_train)
-		name = "GaussianNB"
-	if type == "svm":
-		clf = svm_clf(features_train, labels_train)
-		name = "Support Vector Machine"
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
+# Compute confusion matrix for a model
+def confusionMatrix(classifier, prediction):
+	cm = confusion_matrix(labels_test, prediction)
+	# view with a heatmap
+	sns.heatmap(cm, annot=True, cmap='Blues', xticklabels=['no', 'yes'], yticklabels=['no', 'yes'])
+	plt.ylabel('True label')
+	plt.xlabel('Predicted label')
+	plt.title('Confusion Matrix for %s' % classifier)
+	plt.show()
 
+### Create and fit Classifier and return Accuracy
+def create_classifier(clf_param):
+	clf = clf_param[0]
+	clf_name = clf_param[1]
+	clf.fit(features_train,labels_train)
 	# Get prediction
 	pred = clf.predict(features_test)
 	# Print accuracy 
 	acc = accuracy(pred,labels_test)
-	print "\nAccuracy for",name
+	print "\nAccuracy for",clf_name
 	print "\t",acc
+	confusionMatrix(clf_name, pred)
 
-## Run check of different classifiers
-runtime("dt")
-runtime("nb")
-runtime("svm")
+## Create list with simple setup for multiple classifier
+clf_list = [
+	[tree.DecisionTreeClassifier(),"Decision Tree"],
+	[SVC(),"Support Vector Machine"],
+	[GaussianNB(),"Gaussian Naive-Bayes"],
+	[RandomForestClassifier(),"Random Forest"],
+	[AdaBoostClassifier(),"AdaBoost"],
+	[GradientBoostingClassifier(),"GradientBoosting"],
+	]
+
+## Calculate accuracy for classifiers provided in list
+for classifier in clf_list:
+	create_classifier(classifier)
 
 train_time = time()- t0
 print "\nExploration part done. Time:", train_time
@@ -437,7 +442,7 @@ def gridSearcher():
 	pca_filter = PCA()
 
 	## Set parameters to go through
-	pl_params = {'SelectKBest__k': [7],#[7,8,9,10]
+	pl_params = {'SelectKBest__k': [7,8,9,10],#[7,8,9,10]
 	              'pca__n_components': [2], #[1,2,3]
 #	              'knn__n_neighbors': [1,2,3,4],'knn__algorithm': ['ball_tree', 'kd_tree', 'brute'], 'knn__leaf_size':[3,4,5],'knn__weights':['uniform','distance']
 #	              'dt__min_samples_leaf': [8, 16, 32],'dt__criterion':['gini','entropy'],'dt__random_state':[42]
@@ -458,6 +463,39 @@ def gridSearcher():
 #		('rf', clf_rf) #Precision: 0.15789	Recall: 0.00450
 		('svc', clf_svc) #Precision: 0.34345	Recall: 0.59400
 		])
+
+	## Run the pipeline without GridSearchCV to get the scores for the features in SelectKBest (code partly from forum / Myles)
+	pipeline_check = True
+	if pipeline_check:
+		## Run pipeline to get features
+		pipeline.fit(features_train,labels_train)
+		## SelectKBest step
+		skbest_step = pipeline.named_steps['SelectKBest']
+		# Get SelectKBest scores, rounded to 2 decimal places, name them "feature_scores"
+		feature_scores = ['%.3f' % elem for elem in skbest_step.scores_ ]
+		# Get SelectKBest feature names, whose indices are stored in 'skbest_step.get_support',
+		# create a tuple of feature names, scores and pvalues, name it "features_selected_tuple"
+		features_selected_tuple=[(features_list[i+1], feature_scores[i]) for i in skbest_step.get_support(indices=True)]
+		# Sort the tuple by score, in reverse order
+		features_selected_tuple = sorted(features_selected_tuple, key=lambda feature: float(feature[1]) , reverse=True)
+		print "\nFeature scores"
+		pp.pprint(features_selected_tuple)
+
+		## Plot the feature scores
+		features_selected_tuple_reversed = sorted(features_selected_tuple, key=lambda feature: float(feature[1]) , reverse=False)
+		y_pos = np.arange(len(features_selected_tuple_reversed))
+		performance = []
+		objects = []
+		for point in features_selected_tuple:
+			performance.append(point[1])
+			objects.append(point[0])
+		plt.barh(y_pos,performance, align='center', alpha=0.5)
+		plt.yticks(y_pos,objects)
+		plt.xlabel('Feature Scores')	
+		plt.title('Overview scores of feature')
+		plt.show()
+
+	
 	## Run GridSearchSV
 	gs = GridSearchCV(pipeline, pl_params, scoring='f1', cv=sss) 
 	gs.fit(features_train,labels_train)
@@ -468,6 +506,7 @@ def gridSearcher():
 	## Calculate prediction
 	prediction = gs.predict(features_test)
 	
+
 	## Print output of GridSearchCV
 	print '\nScores'
 	print '\tPrecision:', metrics.precision_score(labels_test, prediction)
@@ -482,6 +521,10 @@ def gridSearcher():
 		print '\t%s: %r' % (param_name, best_parameters[param_name])
 	print '\n', "Classification Report:"
 	print classification_report(labels_test, prediction)
+	matrixResults = gs.cv_results_
+	matrixResults_pd = pd.DataFrame(matrixResults)
+	print type(matrixResults_pd)
+	print "\nGridScores:",matrixResults_pd.head()
 
 	features_selected_bool = gs.best_estimator_.named_steps['SelectKBest'].get_support()
 	features_selected_list = [x for x, y in zip(features_list[1:], features_selected_bool) if y]
@@ -504,7 +547,7 @@ print "\nC.TEST and EXPORT"
 ## Run test 
 test_classifier(clf, my_dataset, features_list, folds = 1000)
 ## Dump data
-dump_classifier_and_data(clf, my_dataset, features_list) #FINAL 
+#dump_classifier_and_data(clf, my_dataset, features_list) #FINAL 
 
 ## Timing
 train_time = time()- t0

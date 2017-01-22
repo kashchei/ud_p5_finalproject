@@ -35,8 +35,6 @@ aS'shared_receipt_with_poi'
 p17
 aS'fraction_to_poi'
 p18
-aS'fraction_from_poi'
-p19
 aS'fraction_to_vs_from'
-p20
+p19
 a.
