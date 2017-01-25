@@ -211,23 +211,21 @@ def missing_salary():
 	return no_salary_lst
 
 ## Print overview of people missing salary information
-pp.pprint(missing_salary())
+#pp.pprint(missing_salary())
 
 ## Based on missing salary list, I checked the names in the insider overview PDF supplied with the data set. And based on this
 ## I selected the following people for excluding (note: 'HIRKO JOSEPH' is a POI)
-selected_no_salaries = ['CORDES WILLIAM R', 'MEYER ROCKFORD G', 'HORTON STANLEY C', 'GIBBS DANA R', \
- 'LOWRY CHARLES P', 'WALTERS GARETH W', 'CHAN RONNIE', 'BELFER ROBERT', 'WODRASKA JOHN', 'URQUHART JOHN A', \
- 'WHALEY DAVID A', 'HAUG DAVID L', 'MENDELSOHN JOHN', 'CLINE KENNETH W', 'LEWIS RICHARD', 'HAYES ROBERT E',\
- 'MCCARTY DANNY J', 'WAKEHAM JOHN', 'POWERS WILLIAM', 'DUNCAN JOHN H', 'LEMAISTRE CHARLES', 'PIRO JIM', 'WROBEL BRUCE', \
- 'MEYER JEROME J', 'MCDONALD REBECCA', 'SCRIMSHAW MATTHEW', 'GATHMANN WILLIAM D', 'GILLIS JOHN', 'MORAN MICHAEL P',\
- 'FOY JOE', 'LOCKHART EUGENE E', 'PEREIRA PAULO V. FERRAZ', 'BLAKE JR. NORMAN P', 'SHERRICK JEFFREY B', 'PRENTICE JAMES',\
- 'THE TRAVEL AGENCY IN THE PARK', 'NOLES JAMES L', 'FOWLER PEGGY', 'CHRISTODOULOU DIOMEDES', 'JAEDICKE ROBERT', \
- 'WINOKUR JR. HERBERT S', 'BROWN MICHAEL', 'BADUM JAMES P', 'HUGHES JAMES A', 'BHATNAGAR SANJAY', 'YEAP SOON', \
- 'HIRKO JOSEPH', 'HAYSLETT RODERICK J', 'FUGH JOHN L', 'SAVAGE FRANK', 'GRAMM WENDY L']
+
+selected_no_salaries = []
+
+'''
+## No salary, no email info, director/stocks below 100,000 - decided NOT to remove anyway
+['CHAN RONNIE','BELFER ROBERT','WODRASKA JOHN','URQUHART JOHN A','WHALEY DAVID A', \
+'MENDELSOHN JOHN','MEYER JEROME J','GILLIS JOHN','LOCKHART EUGENE E']
+'''
 
 # Function to Remove outliers deemed necessary to remove through above
 def remove_outliers(outliers):
-	removedOutliers = []
 	print "\nStatus for removal:" #Final
 	if len(outliers) > 0:
 		for point in outliers:
@@ -251,7 +249,7 @@ features_train, features_test, labels_train, labels_test = \
 	train_test_split(features, labels, test_size=0.3, random_state=42)
 
 ## Plotting several charts 
-#print "\n",features_list[1], features_list[4]
+print "\n",features_list[1], features_list[4]
 simplePlot("salary",1,"bonus",4,True) #FINAL / 8 exercies_stock_options + 9 Other..10=
 #simplePlot("salary",1,"total_stock_value",6)
 #simplePlot("salary",1,"from_this_person_to_poi",15)
@@ -295,7 +293,7 @@ def submitDict():
     return submit_dict
 
 ## Create new data list with new features
-new_features = ['fraction_to_poi','fraction_to_vs_from']#,'fraction_from_poi']#,'fraction_to_vs_from'] 
+new_features = ['fraction_to_poi','fraction_to_vs_from','fraction_from_poi']#,'fraction_to_vs_from'] 
 features_list = features_list + new_features
 
 ## Recreate features and labels
@@ -316,8 +314,8 @@ correlation() #FINAL
 
 ## The correlation chart gives an overview of how the features are interrelated. Three relations high: "total_payments & other" (0.83), 
 ## "to_messages & shared_receipt_with_poi" (0.87), and "total_stock_value & restricted_stock" (0.97) - I decide to remove: other, to_messages, and restricted_stock 
-#remove_features = ['other', 'to_messages', 'restricted_stock'] 
-#features_list = [x for x in features_list if x not in ['other', 'to_messages', 'restricted_stock']]
+
+features_list = [x for x in features_list if x not in ['other', 'to_messages']]#, 'restricted_stock']]
 
 # Recreate features and labels
 labels, features = targetFeatureSplit(data)
@@ -340,8 +338,8 @@ def plotter(f1_index,f2_index,f1_name,f2_name,title):
 	drawPlot(plotData,True,f1_name,f2_name,title=title)
 
 ## Plot new features
-#print "\n",features_list[1], features_list[14]
-#plotter(1,14,"salary","to_poi","Fraction to POI")
+print "\n",features_list[1], features_list[14]
+plotter(1,14,"salary","to_poi","Fraction to POI")
 #plotter(2,16,"salary","from_poi","Fraction from POI")
 #plotter(2,17,"salary","to_vs_from","Fraction To vs From")
 
@@ -388,7 +386,7 @@ def create_classifier(clf_param):
 	acc = accuracy(pred,labels_test)
 	print "\nAccuracy for",clf_name
 	print "\t",acc
-	confusionMatrix(clf_name, pred)
+	#confusionMatrix(clf_name, pred)
 
 ## Create list with simple setup for multiple classifier
 clf_list = [
@@ -418,16 +416,34 @@ t0 = time()
 
 def gridSearcher():
 	## Set scaler
-	scaler = preprocessing.StandardScaler() #preprocessing.MinMaxScaler() 
+	scaler = preprocessing.StandardScaler() 
 
-	## Make scorer
-	#score  = make_scorer(custom_scorer, greater_is_better=True)
+	from sklearn.metrics import precision_score, recall_score, f1_score
+
+	def scorer(predictions, labels_test):
+	    false_positives, true_positives, false_negatives, true_negatives = 0.0, 0.0, 0.0, 0.0
+	    for prediction, truth in zip(predictions, labels_test):
+	        if prediction == 0 and truth == 0:
+	            true_negatives += 1
+	        elif prediction == 0 and truth == 1:
+	            false_negatives += 1
+	        elif prediction == 1 and truth == 0:
+	            false_positives += 1
+	        elif prediction == 1 and truth == 1:
+	            true_positives += 1
+	    try:
+	        precision = 1.0*true_positives/(true_positives+false_positives)
+	        recall = 1.0*true_positives/(true_positives+false_negatives)
+	        f1 = 2.0 * true_positives/(2*true_positives + false_positives+false_negatives)
+	        f2 = (1+2.0*2.0) * precision*recall/(4*precision + recall)
+	    except:
+	        return 0.0
 
 	## Select K best features
 	k_filter = SelectKBest()
 
 	## Prepare stratified shuffle split
-	sss = StratifiedShuffleSplit(1000, test_size=0.2,random_state=42) # Final set to 1000
+	sss = StratifiedShuffleSplit(1000, test_size=0.1,random_state=42) # Final set to 1000
 	sss.get_n_splits(features_train, labels_train) #(features,labels) 
 
 	## Setup Classifiers
@@ -441,22 +457,25 @@ def gridSearcher():
 	## Setup PCA filter
 	pca_filter = PCA()
 
+	from sklearn import feature_selection
+	from sklearn.feature_selection import chi2
 	## Set parameters to go through
-	pl_params = {'SelectKBest__k': [7,8,9,10],#[7,8,9,10]
-	              'pca__n_components': [2], #[1,2,3]
+	pl_params = {'SelectKBest__k': [6], #'SelectKBest__score_func': [feature_selection.f_regression],#[7,8,9,10]
+	              'pca__n_components': [2],#'pca__tol':[0,0.1], #'pca__svd_solver':['auto', 'full', 'arpack', 'randomized'],#'pca__whiten':[True],#[1,2,3]
 #	              'knn__n_neighbors': [1,2,3,4],'knn__algorithm': ['ball_tree', 'kd_tree', 'brute'], 'knn__leaf_size':[3,4,5],'knn__weights':['uniform','distance']
 #	              'dt__min_samples_leaf': [8, 16, 32],'dt__criterion':['gini','entropy'],'dt__random_state':[42]
-#	              'ab__n_estimators': [30,50,100],'ab__learning_rate':[1,2,3]				
+#	              'ab__n_estimators': [50],'ab__learning_rate':[1]				
 #	              'rf__n_estimators': [5,10,15], 'rf__min_samples_leaf':[10,50,100]#,'rf__criterion': ['gini','entropy'],'max_features':['auto','sqrt','log2',None]
-	              'svc__kernel':['rbf'], 'svc__C':[9],'svc__gamma': [0.018], 'svc__class_weight':['balanced'],'svc__max_iter':[-1],'svc__tol':[1] #0.9,1,1.2 
-	             } 
+	              'svc__kernel':['poly'], 'svc__C':[3],'svc__degree': [2], 'svc__class_weight':['balanced'],'svc__max_iter':[-1]#'svc__tol':[0.95] #Precision: 0.31719	Recall: 0.37650	F1: 0.34431	F2: 0.36293
+#	              'svc__kernel':['rbf'], 'svc__C':[10.9],'svc__gamma': [0.18], 'svc__class_weight':['balanced'],'svc__max_iter':[-1],'svc__tol':[0.95] #0.9,1,1.2 
+
+	             }
 	## Create pipeline - after each clf is noted how well they fared in test run
 	pipeline = Pipeline(steps=[
-#		('MinMaxScaler', scaler), 
 		('StandardScaler',scaler),	
 		('SelectKBest', k_filter),
 		('pca', pca_filter),
-#		('nb', clf_nb) #Precision: 0.35041	Recall: 0.19150	
+#		('nb', clf_nb) #Precision: 0.35041	Recall: 0.19150	# Precision: 0.45289	Recall: 0.31000	F1: 0.36806!! Last run
 #		('dt', clf_dt) #Precision: 0.32196	Recall: 0.22650
 #		('knn', clf_knn) #Precision: 0.23293	Recall: 0.22350
 #		('ab', clf_ab) #Precision: 0.27549	Recall: 0.23100
@@ -464,7 +483,7 @@ def gridSearcher():
 		('svc', clf_svc) #Precision: 0.34345	Recall: 0.59400
 		])
 
-	## Run the pipeline without GridSearchCV to get the scores for the features in SelectKBest (code partly from forum / Myles)
+	## Run the pipeline without GridSearchCV to get the scores for the features in SelectKBest (code partly from forum, Myles)
 	pipeline_check = True
 	if pipeline_check:
 		## Run pipeline to get features
@@ -489,15 +508,43 @@ def gridSearcher():
 		for point in features_selected_tuple:
 			performance.append(point[1])
 			objects.append(point[0])
-		plt.barh(y_pos,performance, align='center', alpha=0.5)
-		plt.yticks(y_pos,objects)
-		plt.xlabel('Feature Scores')	
-		plt.title('Overview scores of feature')
-		plt.show()
+		make_plot = False
+		if make_plot:
+			plt.barh(y_pos,performance, align='center', alpha=0.5)
+			plt.yticks(y_pos,objects)
+			plt.xlabel('Feature Scores')	
+			plt.title('Overview scores of feature')
+			plt.show()
 
-	
+	# Made a custom scorer - in the end it gave the same results as 'f1' scoring - and therefore not used
+	def precision_recall(labels,predictions):
+		ind_true_pos = [i for i in range(0,len(labels)) if (predictions[i]==1) & (labels[i]==1)]
+		ind_false_pos = [i for i in range(0,len(labels)) if ((predictions[i]==1) & (labels[i]==0))]
+		ind_false_neg = [i for i in range(0,len(labels)) if ((predictions[i]==0) & (labels[i]==1))]
+		ind_true_neg = [i for i in range(0,len(labels)) if ((predictions[i]==0) & (labels[i]==0))]
+		precision = 0
+		recall = 0
+		
+		ind_labels = [i for i in range(0,len(labels)) if labels[i]==1]
+		
+		if len(ind_labels) !=0:
+			if float( len(ind_true_pos) + len(ind_false_pos))!=0:
+				precision = float(len(ind_true_pos))/float( len(ind_true_pos) + len(ind_false_pos))
+			if float( len(ind_true_pos) + len(ind_false_neg))!=0:
+				recall = float(len(ind_true_pos))/float( len(ind_true_pos) + len(ind_false_neg))
+			return precision, recall
+		else:
+			return -1,-1
+
+	def custom_scorer(labels, predictions):
+		precision,recall = precision_recall(labels,predictions)
+		if precision > 0.4:# and recall < 0.4:
+			f1_score(labels,predictions,average='micro') # >0.4 =	Precision: 0.29940	Recall: 0.64550 / > 0.3 + > 0.3 = 
+		return 0	
+
 	## Run GridSearchSV
-	gs = GridSearchCV(pipeline, pl_params, scoring='f1', cv=sss) 
+	score = make_scorer(custom_scorer, greater_is_better=True)
+	gs = GridSearchCV(pipeline, pl_params, scoring='f1', cv=sss) # scoring = 'f1' 
 	gs.fit(features_train,labels_train)
 
 	## The optimal model selected by GridSearchCV
@@ -506,6 +553,8 @@ def gridSearcher():
 	## Calculate prediction
 	prediction = gs.predict(features_test)
 	
+	## Check precision vs. recall
+	from sklearn.metrics import precision_recall_curve
 
 	## Print output of GridSearchCV
 	print '\nScores'
@@ -547,10 +596,10 @@ print "\nC.TEST and EXPORT"
 ## Run test 
 test_classifier(clf, my_dataset, features_list, folds = 1000)
 ## Dump data
-#dump_classifier_and_data(clf, my_dataset, features_list) #FINAL 
+dump_classifier_and_data(clf, my_dataset, features_list) #FINAL 
 
 ## Timing
-train_time = time()- t0
+train_time = time() - t0
 print "\tOptimal Classifier calculated. Time:", train_time
 
 ## Notify with beep when script has finished running
